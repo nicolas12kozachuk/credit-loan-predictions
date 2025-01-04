@@ -81,7 +81,7 @@ Key details about the model's use, training, and evaluation are summarized in th
 
 ## Resources
 
-- **Presentation**: [Credit Prediction Presentation](#https://drive.google.com/file/d/19B9252yU5ykXUHfrNvzajzXy0VS2jwdt/view?usp=sharing) *([Replace with actual link](https://drive.google.com/file/d/19B9252yU5ykXUHfrNvzajzXy0VS2jwdt/view?usp=sharing)
+- **Presentation**: [Credit Prediction Presentation](#https://drive.google.com/file/d/19B9252yU5ykXUHfrNvzajzXy0VS2jwdt/view?usp=sharing)
 - **Model Card**: Provided in the project files.
 
 ## Caveats
