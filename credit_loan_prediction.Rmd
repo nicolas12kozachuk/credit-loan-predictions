@@ -1,0 +1,167 @@
+---
+title: "Revised Credit Prediction"
+output: html_notebook
+---
+
+Read in data and display the first 6 entries and print the total number of entries
+```{r}
+# load and read in data
+data <- data.frame(read.csv("C:/Users/nkoza/Downloads/state_GA_actions_taken_1-3.csv"))
+
+# display first 6 data entries and prints the number of entries(rows)
+head(data)
+nrow(data)
+```
+
+Preprocessing data: 
+In my original code, I removed feature columns with no entries, removed rows with missing feature entries, removed rows with unavailable sex, race, and ethnicity data. By doing this the number of entries(rows) decreased from 294,097 to 227,154. In my original code, I valued having a complete dataset with all valid entries before ever performing any feature analysis. I changed my approach to instead value having as many data row samples as possible in order to have the largest number of data rows possible in order to best train the model. This was a critique made by a peer when they performed a values critique on my code. I revised my code to reflect this value by only removing the feature columns with more than 50% missing data, as this significant number of missing data is likely due to some error and/or keeping it will likely not help improve the model. This is a better approach because in my original code, when I removed rows with any NA entries for any features, I removed data rows that could help train the model for possibly no reason. For example, say feature X1 has NA values for some data rows and then I removed those data rows, I may be unnecessarily removing data entries for no reason if X1 is not used as a feature for my model. In my revised code when valuing having the largest possible number of data entries, the number of data row samples remains the same at 294,097.
+
+```{r}
+# Identify columns with more than 50% missing values
+high_missing <- colnames(data)[colMeans(is.na(data) | data == "") > 0.5]
+print("Columns with more than 50% missing values:")
+print(high_missing)
+
+# Remove columns with more than 50% missing values
+data <- data[, !(names(data) %in% high_missing)]
+```
+
+```{r}
+#install.packages("caret")
+#install.packages("randomForest")
+```
+
+Feature engineering: 
+In my original code, I valued accuracy over everything and initially used all the features provided in order to have the best performance. After running the random forest model once, I analyzed the feature importances and planned to only remove the features that had a negative impact on performance. No features had a negative impact on performance, but I did find that the feature of denial_reason was the most important feature by a significant amount and then realized that denial_reason had a direct correlation to loan_approval status, as approved loans had a value of 10 for this as denial_reason is not applicable if a loan is approved, but denied loans had values between 1 and 9 for denial reason as the corresponded to the reason the loan was denied. Since this feature is directly and unfairly correlated to the target variable, I removed it to have a fair model that didn't "cheat", but still strictly values accuracy, so that was the extent of my feature engineering for my original code. 
+
+Throughout taking this class, and from both my peer critiques, I realized that valuing high accuracy may not be the best value of this model, as some of the features contain protected classes that have no relation to determining if one should be denied or approved a loan[1]. Additionally, it was studied in class that it sometimes occurs with loans, job hiring, land disposition, etc. that because minorities have been historically discriminated against, using historical data has inherent biases that would then be present in the model[2]. This was also verified by the fairness critique, that the data itself is biased against Blacks and Hawaiian Native Americans. Additionally, from the values critique, I found that valuing accuracy above all else, especially when bias exists against protected classes in a dataset, is not the best ethical choice. When I valued accuracy in my original code, I did not have this in mind, but after finding this out my value changed from having the best performance possible to valuing first being fair and unbiased and then having good performance. This value changed as I was okay with having a lower accuracy, as long as the model is fair, because the dataset is biased, so if the model accuracy was extremely high, then the model would then also be biased. In prioritizing the value of fairness and unbiasedness in terms of protected classes, in my revised code I analyzed each feature and chose the ones that would best suit loan prediction. For example, features such as race, age, gender, and ethnicity should have no effect on one's ability to get a loan[3]. The features used to get a loan should only be those that are related to one's credit history, and the specifics of the loan they are applying for. For example, these would be the loan amount, applicants income, the loan type, loan purpose, etc. 
+
+I analyzed the feature descriptions and chose the features I believed were important in determining if one should be approved or denied a loan. The features were selected in the code block below, and then were slightly manipulated to make them suitable for the model, such as changing the data types and then NOW removing rows with NA entries. As explained earlier, the original code's dataset after preprocessing decreased from 294,097 to 227,154, but with the new revised code the dataset number of rows only decreased from 294,097 to 284,412. Overall the dataset features that were selected to be used for training were the loan amount, applicant income, applicants property value, whether the loan is a high-cost mortgage, the legal claim a lender or creditor has on a property until a debt is paid off, the loan type, the loan purpose, occupancy type of applicant, applicant credit score type, the type of entity purchasing a covered loan from the institution, the financial institution’s Legal Entity Identifier, the 5 digit derived MSA or MD code (essentially area code), the median family income in dollars for the area code, and lastly whether the loan will be used for business or commercial purposes. These features were selected for the revised code as they all correspond to an applicant's credit history, the specifics surrounding the loan, and the institution supplying the loan. This makes the revised code fair and unbiased as no features with protected classes, such as race, ethnicity, age, and gender are used to determine if one will be approved or denied a loan as these features have no effect on one's financial status, and would be discriminatory to include them.
+
+
+
+```{r}
+# Select relevant features based on domain knowledge
+relevant_features <- c("loan_amount", "income", 
+                       "property_value", "hoepa_status", "lien_status", "loan_type", 
+                       "loan_purpose", "applicant_credit_score_type","purchaser_type","occupancy_type","lei","derived_msa.md","ffiec_msa_md_median_family_income","business_or_commercial_purpose")
+
+# Handle missing and infinite values in numerical features
+numerical_features <- names(data)[sapply(data, is.numeric)]
+for (feature in numerical_features) {
+  data[[feature]] <- as.numeric(as.character(data[[feature]]))
+  data[[feature]][is.infinite(data[[feature]]) | is.na(data[[feature]])] <- median(data[[feature]], na.rm = TRUE)
+}
+
+# Add back the target variable
+relevant_features <- c(relevant_features, "action_taken")
+
+# Create a new dataset with selected features
+clean_data <- data[, relevant_features]
+
+# Print the selected features
+print("Selected features:")
+print(relevant_features)
+
+# Remove rows with missing values in the selected features
+clean_data <- na.omit(clean_data)
+
+print(paste("Final number of rows:", nrow(clean_data)))
+print(paste("Final number of features:", ncol(clean_data)))
+
+# Convert action_taken to factor
+clean_data$action_taken <- as.factor(clean_data$action_taken)
+```
+
+Training: 
+Similar to the original code, the model is trained using a Random Forest model with 10 fold cross validation. The one difference is that because the original code used 30 features, only 10 trees were used when training the model due to computational complexities of having so many features and limited computational power. Since the revised code only has 15 features, the number of trees was able to be increased to 100, which helped make the model more robust.
+
+```{r}
+library(caret)      
+library(randomForest) 
+
+set.seed(123)  # For reproducibility
+
+# Convert action taken variable from int to factor
+clean_data$action_taken <- as.factor(clean_data$action_taken)
+
+clean_data <- clean_data[!is.na(clean_data$action_taken), ]
+
+# Randomly shuffle the data
+clean_data<-clean_data[sample(nrow(clean_data)),]
+
+# Create 10 equally size folds for cross validation
+folds <- cut(seq(1,nrow(clean_data)),breaks=10,labels=FALSE)
+
+# Initialize an empty confusion matrix
+overall_confusion <- matrix(0, nrow = length(unique(clean_data$action_taken)), 
+                            ncol = length(unique(clean_data$action_taken)))
+
+# Initialize empty vector to hold accuracies for each cross validation run
+accuracies <- c() 
+
+# Perform 10-fold cross-validation
+for(i in 1:10) {
+    # Segments data by fold 
+    testIndexes <- which(folds == i, arr.ind = TRUE)
+    testData <- clean_data[testIndexes, ]
+    trainData <- clean_data[-testIndexes, ]
+    
+    # Build a Random Forest model to predict 'action_taken'
+    rf_model <- randomForest(action_taken ~ ., data = trainData, ntree = 100, importance = TRUE)
+    
+    # Test the model on test data
+    predictions <- predict(rf_model, newdata = testData)
+    
+    # Calculate confusion matrix for this fold
+    cm <- confusionMatrix(predictions, testData$action_taken)$table
+    
+     # Calculate accuracy for each fold
+    fold_accuracy <- sum(diag(cm)) / sum(cm)
+    accuracies <- c(accuracies, fold_accuracy)
+    
+    # Add the confusion matrix of this fold to the overall confusion matrix
+    overall_confusion <- overall_confusion + cm
+}
+```
+
+Result Analysis Approach: 
+The results for the original and revised code were calculated the same way and both produced the same metrics. Both produced a confusion matrix containing the results, as well as the average accuracy, recall, precision, and F1-score over all 10 folds.
+
+```{r}
+# Print the overall confusion matrix after the loop
+print(overall_confusion)
+
+# Calculate the accuracy from the confusion matrix
+accuracy <- sum(diag(overall_confusion)) / sum(overall_confusion)
+
+# Print the accuracy
+print(paste("Overall Accuracy:", accuracy))
+writeLines("\n")
+
+for(i in 1:10){
+  print(paste("Cross Validation", i, "accuracy: ",  round(accuracies[i],4)))
+}
+
+# Get detailed confusion matrix results
+cm_results <- confusionMatrix(predictions, testData$action_taken)
+
+# Print Precision, Recall, and F1-score
+print(cm_results$byClass[5])  
+print(cm_results$byClass[6])  
+print(cm_results$byClass[7])  
+```
+Results:
+The overall accuracy of the original code was 0.9873, while the revised code has an accuracy of 0.9859, which is only a slight decrease. Although there is a slight decrease in overall accuracy, this is a better model as it is much more fair and unbiased as it doesn't use the protected classes of race, sex, ethnicity, and age. The original code model resulted in a precision of 0.9923, a recall of 0.9891, and a F1-score of 0.9908. The revised model code results in a precision of 0.9927, a recall of 0.9897, and a F1-score of 0.9912. For each of these metrics, the revised model has slightly improved results. Overall, due to the increase in precision, recall, F1-score, and the minimal decrease in accuracy, but with the exclusion of protected classes, the revised code model is a significant improvement in having an unbiased and fair, yet accurate model.
+
+
+```{r}
+varImpPlot(rf_model, cex = 0.5)
+```
+References
+
+[1] Vitak, J., Shilton, K., & Ashktorab, Z. (2016). Beyond the Belmont Principles: Ethical Challenges, Practices, and Beliefs in the Online Data Research Community. Proceedings of the 19th ACM Conference on Computer-Supported Cooperative Work & Social Computing, 941–953. https://doi.org/10.1145/2818048.2820078 
+
+[2] Liu, J. & Sengers, P. (2021, October 18). Legibility and the Legacy of Racialized Dispossession in Digital Agriculture. ACM Digital Library. https://dl.acm.org/doi/10.1145/3479867
+
+[3] Hoffmann, A. L. (2019). Where fairness fails: Data, algorithms, and the limits of antidiscrimination discourse. Information, Communication & Society, 22(7), 900–915. https://doi.org/10.1080/1369118X.2019.1573912
